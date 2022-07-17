@@ -24,12 +24,7 @@ void ARoomSocketHandle::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
-// 	if (IsValid(this) && Socket == nullptr && (!Class.IsEmpty() || Class != TEXT("None")))
-// 	{
-// 		Destroy();
-// 	}
-
-	GEngine->OnActorMoved().AddUObject(this, &ThisClass::ConnectionMoved);
+	GEngine->OnActorMoved().AddUObject(this, &ThisClass::ActorMoved);
 }
 
 bool ARoomSocketHandle::EditorCanAttachTo(const AActor* InParent, FText& OutReason) const
@@ -48,7 +43,7 @@ bool ARoomSocketHandle::CanDeleteSelectedActor(FText& OutReason) const
 	return Super::CanDeleteSelectedActor(OutReason);
 }
 
-void ARoomSocketHandle::ConnectionMoved(AActor* Actor)
+void ARoomSocketHandle::ActorMoved(AActor* Actor)
 {
 	if (Actor && Socket)
 	{	
@@ -60,6 +55,12 @@ void ARoomSocketHandle::ConnectionMoved(AActor* Actor)
 				FEditorScriptExecutionGuard ScriptGuard;
 				ReceiveConnectionMoved(Index);
 			}
+		}
+
+		if (Actor == Socket->GetNode())
+		{
+			FEditorScriptExecutionGuard ScriptGuard;
+			ReceiveNodeMoved();
 		}
 	}
 }

@@ -39,6 +39,21 @@ void ARoom::OnConstruction(const FTransform& Transform)
 			IRoomConstructionNotifyInterface::Execute_OnConstruct(Comp, this);
 		}
 	}
+
+	TArray<AActor*> Attached;
+	GetAttachedActors(Attached);
+	for (AActor* Actor : Attached)
+	{
+		if (IsValid(Actor) && Actor->Implements<URoomConstructionNotifyInterface>())
+		{
+			IRoomConstructionNotifyInterface::Execute_OnConstruct(Actor, this);
+		}
+	}
+}
+
+void ARoom::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
 }
 
 void ARoom::Destroyed()

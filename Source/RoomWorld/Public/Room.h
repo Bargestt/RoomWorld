@@ -28,7 +28,7 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = Room)
 	FRoomPlayerEventDynamic OnPlayerLeave;
-
+	
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Room)
@@ -49,7 +49,9 @@ private:
 public:	
 	ARoom();
 	virtual void OnConstruction(const FTransform& Transform) override;
+	virtual void PostInitializeComponents() override;
 	virtual void Destroyed() override;
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 

@@ -33,11 +33,15 @@ public:
 	virtual bool ShouldExport() override { return true; }
 	virtual bool EditorCanAttachTo(const AActor* InParent, FText& OutReason) const override;
 	virtual bool CanDeleteSelectedActor(FText& OutReason) const;
-	void ConnectionMoved(AActor* Actor);	
+
+	void ActorMoved(AActor* Actor);	
 #endif // WITH_EDITOR
 
 	virtual void SetSocket(URoomSocket* Socket);
 
+	/** Called when owning node moved */
+	UFUNCTION(BlueprintImplementableEvent)
+	void ReceiveNodeMoved();
 
 	/** Called in editor when linked connection is moved */
 	UFUNCTION(BlueprintImplementableEvent)

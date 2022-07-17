@@ -58,4 +58,9 @@ class ROOMWORLD_API URoomWorldFunctionLibrary : public UBlueprintFunctionLibrary
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Room World")
 	static void ResolveObjectReferencesInObjectUsingLevel(UObject* Target, const ULevel* Level);
+
+
+	
+	UFUNCTION(BlueprintCallable, Category = "Room World")
+	static FTransform CalcSliceTransformAtSplineOffset(USplineMeshComponent* Comp, const float Alpha);
 };

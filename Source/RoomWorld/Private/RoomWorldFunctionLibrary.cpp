@@ -5,6 +5,7 @@
 #include <LevelUtils.h>
 #include <UObject/UnrealType.h>
 #include <ProfilingDebugging/ScopedTimers.h>
+#include <Components/SplineMeshComponent.h>
 
 TSoftObjectPtr<UWorld> URoomWorldFunctionLibrary::GetWorldPtrFromSoftObjectPath(const FSoftObjectPath& Path)
 {
@@ -56,7 +57,6 @@ FSoftObjectPath URoomWorldFunctionLibrary::ResolveSoftObjectPathUsingLevel(const
 	return ResolveSoftObjectPathUsingLevelPath(Object, Level, GetStreamedLevelAssetPath(Level).GetAssetPathName());
 }
 
-PRAGMA_DISABLE_OPTIMIZATION
 FSoftObjectPath URoomWorldFunctionLibrary::ResolveSoftObjectPathUsingLevelPath(const FSoftObjectPath& Path, const ULevel* Level, const FName& StreamedLevelPath)
 {
 	FSoftObjectPath NewPath;
@@ -106,4 +106,8 @@ void URoomWorldFunctionLibrary::ResolveObjectReferencesInObjectUsingLevel(UObjec
 
 	UE_LOG(LogRoomWorld, Warning, TEXT("ResolveObjectReferencesInObjectUsingLevel: x%d in %f ms"), NumResolved, Timer.GetTime()*1000.0);
 }
-PRAGMA_ENABLE_OPTIMIZATION
+
+FTransform URoomWorldFunctionLibrary::CalcSliceTransformAtSplineOffset(USplineMeshComponent* Comp, const float Alpha)
+{
+	return Comp ? Comp->CalcSliceTransformAtSplineOffset(Alpha) : FTransform::Identity;
+}
