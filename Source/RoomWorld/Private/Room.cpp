@@ -25,40 +25,14 @@ ARoom::ARoom()
 	
 }
 
-void ARoom::OnConstruction(const FTransform& Transform)
+void ARoom::BeginPlay()
 {
-	InitializeSockets(RoomData ? RoomData->SocketData : TMap<FName, FSocketData>());
+	Super::BeginPlay();
 
-	Super::OnConstruction(Transform);
-
-	const TSet<UActorComponent*>& AllComponents = GetComponents();
-	for (UActorComponent* Comp : AllComponents)
+	if (bPendingEnsureState)
 	{
-		if (Comp && Comp->Implements<URoomConstructionNotifyInterface>())
-		{
-			IRoomConstructionNotifyInterface::Execute_OnConstruct(Comp, this);
-		}
+		EnsureState();
 	}
-
-	TArray<AActor*> Attached;
-	GetAttachedActors(Attached);
-	for (AActor* Actor : Attached)
-	{
-		if (IsValid(Actor) && Actor->Implements<URoomConstructionNotifyInterface>())
-		{
-			IRoomConstructionNotifyInterface::Execute_OnConstruct(Actor, this);
-		}
-	}
-}
-
-void ARoom::PostInitializeComponents()
-{
-	Super::PostInitializeComponents();
-}
-
-void ARoom::Destroyed()
-{
-	Super::Destroyed();
 }
 
 void ARoom::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -79,6 +53,11 @@ void ARoom::EndPlay(const EEndPlayReason::Type EndPlayReason)
 bool ARoom::CanMove() const
 {
 	return GetCurrentState() != ERoomState::Visible;
+}
+
+const TMap<FName, FSocketData>& ARoom::GetSocketData() const
+{
+	return RoomData ? RoomData->SocketData : Super::GetSocketData();
 }
 
 ULevelStreamingDynamic* ARoom::InitializeLevelStreaming()
@@ -107,7 +86,7 @@ ULevelStreamingDynamic* ARoom::InitializeLevelStreaming()
 
 void ARoom::SetState(ERoomState State)
 {
-	DesiredState = State;	
+	DesiredState = State;
 	EnsureState();
 }
 
@@ -132,10 +111,12 @@ ERoomState ARoom::GetCurrentState() const
 
 void ARoom::EnsureState()
 {
-	if (!HasActorBegunPlay() && !IsActorBeginningPlay())
+	if (!HasActorBegunPlay() || IsActorBeginningPlay())
 	{
+		bPendingEnsureState = true;
 		return;
 	}
+	bPendingEnsureState = false;
 
 	ERoomState CurrentState = GetCurrentState();
 	if (DesiredState != CurrentState)
@@ -200,7 +181,7 @@ bool ARoom::SetRoomData(URoomData* NewRoomData)
 
 	LevelStreaming = nullptr;
 	RoomData = NewRoomData;
-	InitializeSockets(RoomData->SocketData);
+	RebuildSockets();
 
 	return true;
 }
@@ -221,25 +202,37 @@ ULevelStreamingDynamic* ARoom::GetLevelStreaming() const
 }
 
 void ARoom::HandleLevelLoaded()
-{
-	for (AActor* LevelActor : LevelStreaming->GetLoadedLevel()->Actors)
+{	
+	TMap<FName, AActor*> SourceActors;
 	{
-		if (LevelActor && LevelActor->Implements<URoomOwnedObjectInterface>())
+		ForEachSocket([this, &SourceActors](URoomSocket* Socket)
 		{
-			IRoomOwnedObjectInterface::Execute_SetOwningRoom(LevelActor, this);
-		}
-	}
-
-	ReceiveLevelLoaded();
-
-	for (auto& Pair : Sockets)
-	{
-		if (URoomSocket* Socket = Pair.Value)
+			if (!Socket->SourceActorName.IsNone())
+			{
+				SourceActors.Add(Socket->SourceActorName);
+			}
+		});
+		ForEachActorInLevel([&SourceActors](AActor* Actor)
 		{
-			IRoomListenerInterface::Execute_OnRoomLoaded(Socket, this);
-		}
+			if (AActor** SourceActor = SourceActors.Find(Actor->GetFName()))
+			{
+				if (*SourceActor == nullptr)
+				{
+					*SourceActor = Actor;
+				}
+			}
+		});
 	}
 	
+
+	ReceiveLevelLoaded();
+	ForEachSocket([this, &SourceActors](URoomSocket* Socket)
+	{
+		Socket->SourceActor = SourceActors.FindRef(Socket->SourceActorName);
+		IRoomListenerInterface::Execute_OnRoomLoaded(Socket, this);
+	});	
+
+
 	ReceiveStateChanged(GetCurrentState());
 	OnStateChanged.Broadcast(this, GetCurrentState());
 
@@ -249,13 +242,11 @@ void ARoom::HandleLevelLoaded()
 void ARoom::HandleLevelUnloaded()
 {
 	ReceiveLevelUnloaded();
-	for (auto& Pair : Sockets)
+	ForEachSocket([this](URoomSocket* Socket)
 	{
-		if (URoomSocket* Socket = Pair.Value)
-		{
-			IRoomListenerInterface::Execute_OnRoomUnloaded(Socket, this);
-		}
-	}
+		Socket->SourceActor = nullptr;
+		IRoomListenerInterface::Execute_OnRoomUnloaded(Socket, this);
+	});
 
 	ReceiveStateChanged(GetCurrentState());
 	OnStateChanged.Broadcast(this, GetCurrentState());
@@ -263,14 +254,19 @@ void ARoom::HandleLevelUnloaded()
 
 void ARoom::HandleLevelShown()
 {
-	ReceiveLevelShown();
-	for (auto& Pair : Sockets)
+	ForEachActorInLevel([this](AActor* Actor)
 	{
-		if (URoomSocket* Socket = Pair.Value)
+		if (Actor->Implements<URoomOwnedObjectInterface>())
 		{
-			IRoomListenerInterface::Execute_OnRoomShown(Socket, this);
+			IRoomOwnedObjectInterface::Execute_SetOwningRoom(Actor, this);
 		}
-	}
+	});
+
+	ReceiveLevelShown();
+	ForEachSocket([this](URoomSocket* Socket)
+	{		
+		IRoomListenerInterface::Execute_OnRoomShown(Socket, this);
+	});
 
 	ReceiveStateChanged(GetCurrentState());
 	OnStateChanged.Broadcast(this, GetCurrentState());
@@ -279,13 +275,11 @@ void ARoom::HandleLevelShown()
 void ARoom::HandleLevelHidden()
 {
 	ReceiveLevelHidden();
-	for (auto& Pair : Sockets)
+	ForEachSocket([this](URoomSocket* Socket)
 	{
-		if (URoomSocket* Socket = Pair.Value)
-		{
-			IRoomListenerInterface::Execute_OnRoomHidden(Socket, this);
-		}
-	}
+		IRoomListenerInterface::Execute_OnRoomHidden(Socket, this);
+	});
+	
 	
 	ReceiveStateChanged(GetCurrentState());
 	OnStateChanged.Broadcast(this, GetCurrentState());

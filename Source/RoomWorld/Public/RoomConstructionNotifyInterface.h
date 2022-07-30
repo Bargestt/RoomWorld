@@ -14,13 +14,15 @@ class URoomConstructionNotifyInterface : public UInterface
 };
 
 /**
- * 
+ * Used in editor to notify execute construction event in room components and attached actors
  */
 class ROOMWORLD_API IRoomConstructionNotifyInterface
 {
 	GENERATED_BODY()
 public:
+
+	/** Notify room actor constructed */
 	UFUNCTION(BlueprintNativeEvent, Category = Room)
-	void OnConstruct(ARoom* Room);
+	void OnConstruct(class ARoomNode* RoomNode);
 
 };

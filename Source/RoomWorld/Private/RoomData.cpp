@@ -5,14 +5,14 @@
 #include "RoomWorldSettings.h"
 
 
-void URoomData::PostLoad()
-{
-	Super::PostLoad();
-}
-
 URoomData::URoomData()
 {
 	SocketTags.Add(URoomWorldSettings::Get()->DefaultSocketTag);
+}
+
+void URoomData::PostLoad()
+{
+	Super::PostLoad();
 }
 
 
@@ -22,6 +22,9 @@ void URoomData::CollectLevelData()
 {
 	Messages.Empty();
 	SocketData.Empty();
+	BoundingBox = FBox();
+
+	bool bImplementsCollector = GetClass()->IsFunctionImplementedInScript(TEXT("CollectSocketDataFromActor"));
 
 	UWorld* WorldAsset = Cast<UWorld>(LevelPath.TryLoad());
 	if (WorldAsset)
@@ -36,6 +39,12 @@ void URoomData::CollectLevelData()
 				continue;
 			}
 
+			if (Actor->IsLevelBoundsRelevant())
+			{
+				BoundingBox += Actor->CalculateComponentsBoundingBoxInLocalSpace();
+			}
+
+			// Collect socket data
 			for (const FName& SocketTag : SocketTags)
 			{
 				if (Actor->ActorHasTag(SocketTag))
@@ -47,13 +56,23 @@ void URoomData::CollectLevelData()
 					}
 
 					FName SocketName = *SocketNameString;
-					if (!SocketData.Contains(SocketName))
+
+					const FSocketData* ExistingData = SocketData.Find(SocketName);
+					if (ExistingData == nullptr)
 					{
-						SocketData.Add(SocketName, { Actor->GetActorTransform() });
+						FSocketData Data;
+						Data.Transform = Actor->GetActorTransform();
+						if (bImplementsCollector)
+						{
+							Data = CollectSocketDataFromActor(Actor);
+						}						
+						Data.SourceActor = Actor;
+
+						SocketData.Add(SocketName, Data);
 					}
 					else
 					{
-						Messages.Add(FString::Printf(TEXT("Error: Socket '%s' already exists. Actor %s"), *SocketNameString, *GetNameSafe(Actor)));
+						Messages.Add(FString::Printf(TEXT("Error: Failed to add '%s' from %s already created by %s"), *SocketNameString, *GetNameSafe(Actor), *ExistingData->SourceActor.GetSubPathString()));
 					}					
 				}
 			}

@@ -21,9 +21,7 @@ class ROOMWORLD_API IRoomOwnedObjectInterface
 	GENERATED_BODY()
 public:
 
+	/** Called after begin play */
 	UFUNCTION(BlueprintNativeEvent, Category = Room)
 	void SetOwningRoom(ARoom* Room);
-
-	UFUNCTION(BlueprintNativeEvent, Category = Room)
-	void GetOwningRoom(ARoom*& Room);
 };

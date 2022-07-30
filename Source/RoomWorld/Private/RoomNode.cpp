@@ -25,14 +25,18 @@ ARoomNode::ARoomNode()
 
 	SocketClass = URoomSocket_Single::StaticClass();
 	SocketHandleClass = ARoomSocketHandle::StaticClass();
+
+	NodeColor = FLinearColor::Transparent;
 }
 
-void ARoomNode::OnConstruction(const FTransform& Transform)
+void ARoomNode::PostLoad()
 {
-	TArray<AActor*> Attached;
-	GetAttachedActors(Attached);
-	for (AActor* Actor : Attached)
-	{
+	Super::PostLoad();
+
+	RebuildSockets();
+
+	ForEachAttachedActors([this](AActor* Actor) 
+	{ 
 		if (ARoomSocketHandle* Handle = Cast<ARoomSocketHandle>(Actor))
 		{
 			if (Handle->Socket == nullptr || Sockets.FindKey(Handle->Socket) == nullptr)
@@ -40,56 +44,92 @@ void ARoomNode::OnConstruction(const FTransform& Transform)
 				Handle->Destroy();
 			}
 		}
+
+		return true; 
+	});
+}
+
+void ARoomNode::PostInitializeComponents()
+{
+	InitialPosition = GetActorTransform();
+
+	Super::PostInitializeComponents();
+}	
+
+void ARoomNode::OnConstruction(const FTransform& Transform)
+{
+	if (NodeColor == FLinearColor::Transparent)
+	{
+		NodeColor = FLinearColor::MakeRandomColor();
 	}
+
+	RebuildSockets();
+
+	ForEachComponent<UActorComponent>(false, [this](UActorComponent* Comp)
+	{
+		if (IsValid(Comp) && Comp->Implements<URoomConstructionNotifyInterface>())
+		{
+			IRoomConstructionNotifyInterface::Execute_OnConstruct(Comp, this);
+		}
+	});
+
+	ForEachAttachedActors([this](AActor* Actor) 
+	{ 
+		if (ARoomSocketHandle* Handle = Cast<ARoomSocketHandle>(Actor))
+		{
+			if (Handle->Socket == nullptr || Sockets.FindKey(Handle->Socket) == nullptr)
+			{
+				Handle->Destroy();
+			}
+		}
+
+		if (IsValid(Actor) && Actor->Implements<URoomConstructionNotifyInterface>())
+		{
+			IRoomConstructionNotifyInterface::Execute_OnConstruct(Actor, this);
+		}
+
+		return true; 
+	});
+
+	Super::OnConstruction(Transform);
 }
 
 void ARoomNode::Destroyed()
 {
 	Super::Destroyed();
 
-#if WITH_EDITOR
-	TArray<AActor*> Attached;
-	GetAttachedActors(Attached);
-
-	for (AActor* Actor : Attached)
-	{
+	ForEachAttachedActors([this](AActor* Actor) 
+	{ 
 		if (IsValid(Actor))
 		{
 			Actor->Destroy();
-		}
-	}
-#endif //WITH_EDITOR
-}
+		}	
 
-void ARoomNode::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	TArray<AActor*> Attached;
-	GetAttachedActors(Attached);
-
-	for (AActor* Actor : Attached)
-	{
-		if (IsValid(Actor))
-		{
-			Actor->Destroy();
-		}		
-	}
-
-	Super::EndPlay(EndPlayReason);
+		return true; 
+	});
 }
 
 
 
-void ARoomNode::InitializeSockets(const TMap<FName, FSocketData>& InSocketData)
+const TMap<FName, FSocketData>& ARoomNode::GetSocketData() const
 {
+	static const TMap<FName, FSocketData> Empty;
+	return Empty;
+}
+
+void ARoomNode::RebuildSockets()
+{
+	const TMap<FName, FSocketData>& SocketData = GetSocketData();
+
 	TMap<FName, URoomSocket*> OldSockets = Sockets;
 	Sockets.Empty();
 
 	if (SocketClass)
 	{
-		for (const auto& SocketData : InSocketData)
+		for (const auto& Pair : SocketData)
 		{
-			const FName& SocketName = SocketData.Key;
-			const FSocketData& Data = SocketData.Value;
+			const FName& SocketName = Pair.Key;
+			const FSocketData& Data = Pair.Value;
 
 			URoomSocket* Socket = nullptr;
 			OldSockets.RemoveAndCopyValue(SocketName, Socket);
@@ -189,31 +229,45 @@ bool ARoomNode::GetRoomSocket(FName Name, URoomSocket*& Socket) const
 	return (SocketPtr != nullptr);
 }
 
-bool ARoomNode::SnapWithNode(FName Socket, ARoomNode* TargetRoom, FName TargetSocket)
+
+void ARoomNode::OnSnapped(FName Socket, ARoomNode* OtherNode, FName OtherSocket)
 {
+	ReceiveWasSnapped(Socket, OtherNode, OtherSocket);
+}
+
+bool ARoomNode::SnapWithNode(FName Socket, ARoomNode* TargetNode, FName TargetSocket)
+{
+#if WITH_EDITOR
+	if (GetWorld() && GetWorld()->IsPreviewWorld() && !bCanMoveInEditor)
+	{
+		return false;
+	}
+#endif // WITH_EDITOR
+
+
 	if (!CanMove())
 	{
-		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Node can't move"), *GetNameSafe(this), *GetNameSafe(TargetRoom));
+		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Node can't move"), *GetNameSafe(this), *GetNameSafe(TargetNode));
 		return false;
 	}
 
-	if (TargetRoom == nullptr || TargetRoom == this)
+	if (TargetNode == nullptr || TargetNode == this)
 	{
-		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Invalid target"), *GetNameSafe(this), *GetNameSafe(TargetRoom));
+		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Invalid target"), *GetNameSafe(this), *GetNameSafe(TargetNode));
 		return false;
 	}
 
 	URoomSocket* LocalSocketData = nullptr;
 	if (!GetRoomSocket(Socket, LocalSocketData))
 	{
-		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Socket '%s' does not exist in %s"), *GetNameSafe(this), *GetNameSafe(TargetRoom), *Socket.ToString(), *GetNameSafe(this));
+		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Socket '%s' does not exist in %s"), *GetNameSafe(this), *GetNameSafe(TargetNode), *Socket.ToString(), *GetNameSafe(this));
 		return false;
 	}
 
 	URoomSocket* TargetSocketData = nullptr;
-	if (!TargetRoom->GetRoomSocket(TargetSocket, TargetSocketData))
+	if (!TargetNode->GetRoomSocket(TargetSocket, TargetSocketData))
 	{
-		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Socket '%s' does not exist in %s"), *GetNameSafe(this), *GetNameSafe(TargetRoom), *TargetSocket.ToString(), *GetNameSafe(TargetRoom));
+		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: Socket '%s' does not exist in %s"), *GetNameSafe(this), *GetNameSafe(TargetNode), *TargetSocket.ToString(), *GetNameSafe(TargetNode));
 		return false;
 	}
 
@@ -222,34 +276,47 @@ bool ARoomNode::SnapWithNode(FName Socket, ARoomNode* TargetRoom, FName TargetSo
 
 	if (!LocalSocketData || !TargetSocketData)
 	{
-		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: missing socket data"), *GetNameSafe(this), *GetNameSafe(TargetRoom));
+		UE_LOG(LogRoomWorld, Error, TEXT("RoomNode %s snap with %s failed: missing socket data"), *GetNameSafe(this), *GetNameSafe(TargetNode));
 		return false;
 	}
 
 	FTransform Result = FTransform((LocalSocketData->Rotation + FRotator(0, 180, 0)).Quaternion(), LocalSocketData->Location).Inverse() * TargetSocketData->GetTransform();
 	SetActorTransform(Result);
+	OnSnapped(Socket, TargetNode, TargetSocket);
+
 	return true;
 
+}
+
+void ARoomNode::SnapAllConnectedNodes()
+{
+	ForEachSocket([this](URoomSocket* Socket)
+	{
+		for (URoomSocket* ConnectedSocket : Socket->ConnectedTo)
+		{
+			ARoomNode* ConnectedNode = ConnectedSocket ? ConnectedSocket->GetNode() : nullptr;
+			if (ConnectedNode && ConnectedNode->CanMove())
+			{
+				ConnectedNode->SnapWithNode(ConnectedSocket->Name, this, Socket->Name);
+			}
+		}
+	});
 }
 
 bool ARoomNode::GetConnectedNodes(TArray<ARoomNode*>& Nodes, TSubclassOf<ARoomNode> ClassFilter) const
 {
 	Nodes.Reset();
-	for (const auto& Pair : Sockets)
+	ForEachSocket([&Nodes, &ClassFilter](URoomSocket* Socket)
 	{
-		URoomSocket* Socket = Pair.Value;
-		if (Socket)
+		TArray<ARoomNode*> ConnectedNodes = Socket->GetConnectedNodes();
+		for (ARoomNode* Node : ConnectedNodes)
 		{
-			TArray<ARoomNode*> ConnectedNodes = Socket->GetConnectedNodes();
-			for (ARoomNode* Node : ConnectedNodes)
+			if (!ClassFilter || Node->IsA(ClassFilter))
 			{
-				if (!ClassFilter || Node->IsA(ClassFilter))
-				{
-					Nodes.AddUnique(Node);
-				}
+				Nodes.AddUnique(Node);
 			}
 		}
-	}
+	});	
 
 	return Nodes.Num() > 0;
 }

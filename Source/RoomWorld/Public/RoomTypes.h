@@ -26,5 +26,10 @@ struct FSocketData
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FTransform Transform;
-	
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (AllowedClasses = "Actor"))
+	FSoftObjectPath SourceActor;
+
+	UPROPERTY(VisibleAnywhere, Instanced, BlueprintReadWrite)
+	UObject* AdvancedData;
 };

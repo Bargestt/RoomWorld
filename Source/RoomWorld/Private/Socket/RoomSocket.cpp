@@ -11,6 +11,19 @@ URoomSocket::URoomSocket()
 	
 }
 
+void URoomSocket::PostLoad()
+{
+	Super::PostLoad();
+
+	// #TODO: Make connections weak ptrs
+	if (Room == nullptr || Room->Sockets.FindKey(this) == nullptr)
+	{
+		MarkPendingKill();
+	}
+
+	SyncHandles();
+}
+
 #if WITH_EDITOR
 void URoomSocket::PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent)
 {
@@ -29,6 +42,11 @@ void URoomSocket::Initialize(FName InName, const FSocketData& Data)
 	Location = Data.Transform.GetLocation();
 	Rotation = Data.Transform.GetRotation().Rotator();
 	Name = InName;
+
+	FString ActorNameStr = Data.SourceActor.GetSubPathString();
+	ActorNameStr.RemoveFromStart(TEXT("PersistentLevel."));
+
+	SourceActorName = *ActorNameStr;
 }
 
 void URoomSocket::SyncHandles()

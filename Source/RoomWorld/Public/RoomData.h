@@ -21,6 +21,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Room, meta = (AllowedClasses = "World"))
 	FSoftObjectPath LevelPath;
 
+	/** Room bounds in room space */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Room)
+	FBox BoundingBox;
+
 	/** 
 	 * Collect sockets from level using these tags. 
 	 * Sockets are named using actor labels: {SocketTag}.{ActorLabel}
@@ -43,11 +47,14 @@ public:
 
 #if WITH_EDITOR
 
-	UFUNCTION(BlueprintCallable, CallInEditor, Category = Room)
+	UFUNCTION(BlueprintCallable, Category = Room)
 	void CollectLevelData();
 
 #endif //WITH_EDITOR
 
+	
+	UFUNCTION(BlueprintImplementableEvent)
+	FSocketData CollectSocketDataFromActor(AActor* Actor) const;
 
 	UFUNCTION(BlueprintCallable, Category = Room)
 	TSoftObjectPtr<UWorld> GetSoftLevelPtr() const { return TSoftObjectPtr<UWorld>(LevelPath); }

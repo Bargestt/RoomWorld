@@ -30,15 +30,23 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Socket)
 	FRotator Rotation;
 
+
+	UPROPERTY()
+	FName SourceActorName;
+
+	/** Actor in level that provided data for this socket. Resolved on level load */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Socket)
+	AActor* SourceActor;
+
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Handle)
 	TSubclassOf<ARoomSocketHandle> HandleClass;
 
-	UPROPERTY()
+	UPROPERTY(NonPIEDuplicateTransient)
 	ARoomSocketHandle* Handle;
 
 
-	UPROPERTY()
+	UPROPERTY(EditInstanceOnly, Category = Socket, meta = (DisplayName = "ConnectedTo(Actual)"), AdvancedDisplay)
 	TArray<URoomSocket*> ConnectedTo;
 
 	UPROPERTY(EditInstanceOnly, Category = Socket, meta = (DisplayName = "ConnectedTo"))
@@ -47,6 +55,7 @@ public:
 public:
 	// Sets default values for this actor's properties
 	URoomSocket();
+	virtual void PostLoad() override;
 
 #if WITH_EDITOR
 	void PostEditChangeProperty(struct FPropertyChangedEvent& PropertyChangedEvent) override;

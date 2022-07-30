@@ -13,7 +13,7 @@ class URoomSocket;
  * Base editor only class for operating with sockets in the level viewport 
  * Removed from cooked builds
  */
-UCLASS(Blueprintable, ClassGroup = (RoomWorld), hideCategories = (Transform,Replication,Collision,Input,LOD,Cooking))
+UCLASS(Blueprintable, ClassGroup = (RoomWorld), hideCategories = (Transform,Replication,Collision,Input,LOD,Cooking,Actor))
 class ROOMWORLD_API ARoomSocketHandle : public AActor
 {
 	GENERATED_BODY()
@@ -33,6 +33,7 @@ public:
 	virtual bool ShouldExport() override { return true; }
 	virtual bool EditorCanAttachTo(const AActor* InParent, FText& OutReason) const override;
 	virtual bool CanDeleteSelectedActor(FText& OutReason) const;
+	virtual bool IsListedInSceneOutliner() const override;
 
 	void ActorMoved(AActor* Actor);	
 #endif // WITH_EDITOR
@@ -58,7 +59,9 @@ public:
 
 public:
 
-
+	/** Changes visibility for sockets in outliner. Will require outliner refresh(starting PIE or Undo) */
+	UFUNCTION(CallInEditor, Category = Editor)
+	void ToggleSocketVisibility();
 };
 
 

@@ -46,19 +46,22 @@ private:
 	ERoomState DesiredState;
 
 
+	// Waiting to finish begin play to run EnsureState
+	uint8 bPendingEnsureState : 1;
+
+
 public:	
 	ARoom();
-	virtual void OnConstruction(const FTransform& Transform) override;
-	virtual void PostInitializeComponents() override;
-	virtual void Destroyed() override;
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 
 public:
 //~ Begin ARoomNode Interface
 	virtual bool CanMove() const override;
+	virtual const TMap<FName, FSocketData>& GetSocketData() const override;
 //~ End ARoomNode Interface
 
 
@@ -118,6 +121,7 @@ protected:
 	void ReceiveLevelHidden();
 
 
+
 	/*--------------------------------------------
 	 	Visibility requests
 	 *--------------------------------------------*/
@@ -155,5 +159,25 @@ protected:
 	void RequesterDestroyed_Actor(AActor* Requester);
 
 
+
+	/*--------------------------------------------
+		Utility
+	 *--------------------------------------------*/
+public:
+
+	template<typename Func>
+	void ForEachActorInLevel(Func InFunc) const
+	{
+		if (LevelStreaming && LevelStreaming->GetLoadedLevel())
+		{
+			for (AActor* LevelActor : LevelStreaming->GetLoadedLevel()->Actors)
+			{
+				if (IsValid(LevelActor))
+				{
+					InFunc(LevelActor);
+				}
+			}
+		}
+	}
 };
 

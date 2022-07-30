@@ -3,6 +3,16 @@
 
 #include "Socket/RoomSocketHandle.h"
 
+namespace RoomWorldCVars
+{
+	static int32 RoomSocketsVisibility = 1;
+	FAutoConsoleVariableRef CVarShowRoomSockets(
+		TEXT("ShowRoomSockets"),
+		RoomSocketsVisibility,
+		TEXT("Whether to show RoomSockets in Outliner\n")
+		TEXT("0: Hidden, 1: Visible"),
+		ECVF_Default);
+}
 
 
 ARoomSocketHandle::ARoomSocketHandle()
@@ -11,6 +21,10 @@ ARoomSocketHandle::ARoomSocketHandle()
 
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	bIsEditorOnlyActor = true;
+
+#if WITH_EDITORONLY_DATA
+	bListedInSceneOutliner = false;	
+#endif //WITH_EDITORONLY_DATA
 }
 
 #if WITH_EDITOR
@@ -41,6 +55,11 @@ bool ARoomSocketHandle::CanDeleteSelectedActor(FText& OutReason) const
 	}
 
 	return Super::CanDeleteSelectedActor(OutReason);
+}
+
+bool ARoomSocketHandle::IsListedInSceneOutliner() const
+{	
+	return Super::IsListedInSceneOutliner() || RoomWorldCVars::RoomSocketsVisibility != 0;
 }
 
 void ARoomSocketHandle::ActorMoved(AActor* Actor)
@@ -74,4 +93,9 @@ void ARoomSocketHandle::SetSocket(URoomSocket* InSocket)
 #if WITH_EDITORONLY_DATA
 	Class = Socket ? Socket->GetClass()->GetDisplayNameText().ToString() : TEXT("");
 #endif
+}
+
+void ARoomSocketHandle::ToggleSocketVisibility()
+{
+	RoomWorldCVars::RoomSocketsVisibility = !RoomWorldCVars::RoomSocketsVisibility;
 }
